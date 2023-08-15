@@ -1,0 +1,15 @@
+{
+  "name": "mint",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "@solana/web3.js": "^1.78.4",
+    "@types/node": "^20.5.0",
+    "bs58": "^5.0.0",
+    "typescript": "^5.1.6"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.1"
+  }
+}
