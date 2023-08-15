@@ -4,6 +4,7 @@
   "main": "index.js",
   "license": "MIT",
   "dependencies": {
+    "@solana/spl-token": "^0.3.8",
     "@solana/web3.js": "^1.78.4",
     "@types/node": "^20.5.0",
     "bs58": "^5.0.0",
