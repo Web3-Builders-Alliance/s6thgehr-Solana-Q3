@@ -1,0 +1,86 @@
+import {
+  Connection,
+  Keypair,
+  SystemProgram,
+  PublicKey,
+  LAMPORTS_PER_SOL,
+} from "@solana/web3.js";
+import {
+  getOrCreateAssociatedTokenAccount,
+  TOKEN_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  getMint,
+} from "@solana/spl-token";
+import {
+  Program,
+  Wallet,
+  AnchorProvider,
+  Address,
+  BN,
+} from "@coral-xyz/anchor";
+import { WbaVault, IDL } from "../../Prerequisite/airdrop/programs/wba_vault";
+import wallet from "../mint/wba-wallet.json";
+import keys from "../keys.json";
+
+const keypair = Keypair.fromSecretKey(new Uint8Array(wallet));
+const connection = new Connection("https://api.devnet.solana.com");
+
+const provider = new AnchorProvider(connection, new Wallet(keypair), {
+  commitment: "confirmed",
+});
+
+const program = new Program<WbaVault>(
+  IDL,
+  "D51uEDHLbWAxNfodfQDv7qkp8WZtxrhi3uganGbNos7o" as Address,
+  provider
+);
+
+const mint = new PublicKey(keys.token_mint);
+
+const vaultState = new PublicKey(keys.vault_state);
+
+const vaultAuth_seeds = [Buffer.from("auth"), vaultState.toBuffer()];
+const [vaultAuth, _bumpAuth] = PublicKey.findProgramAddressSync(
+  vaultAuth_seeds,
+  program.programId
+);
+
+(async () => {
+  try {
+    const mintInfo = await getMint(connection, mint);
+    const ownerATA = await getOrCreateAssociatedTokenAccount(
+      connection,
+      keypair,
+      mint,
+      keypair.publicKey
+    );
+
+    const vaultATA = await getOrCreateAssociatedTokenAccount(
+      connection,
+      keypair,
+      mint,
+      vaultAuth,
+      true
+    );
+
+    const txhash = await program.methods
+      .depositSpl(new BN(40 * 10 ** mintInfo.decimals))
+      .accounts({
+        owner: keypair.publicKey,
+        vaultState: vaultState,
+        vaultAuth: vaultAuth,
+        systemProgram: SystemProgram.programId,
+        ownerAta: ownerATA.address,
+        vaultAta: vaultATA.address,
+        tokenMint: mint,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      })
+      .signers([keypair])
+      .rpc();
+    console.log(`Success! Check out your TX here:
+  https://explorer.solana.com/tx/${txhash}?cluster=devnet`);
+  } catch (e) {
+    console.error(`Oops, something went wrong: ${e}`);
+  }
+})();
