@@ -19,7 +19,7 @@ import {
   BN,
 } from "@coral-xyz/anchor";
 import { WbaVault, IDL } from "../../Prerequisite/airdrop/programs/wba_vault";
-import wallet from "../mint/wba-wallet.json";
+import wallet from "../../wba-wallet.json";
 import keys from "../keys.json";
 
 const keypair = Keypair.fromSecretKey(new Uint8Array(wallet));

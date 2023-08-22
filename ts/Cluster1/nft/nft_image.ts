@@ -1,23 +1,11 @@
-import {
-  Commitment,
-  Connection,
-  Keypair,
-  PublicKey,
-  TransactionMessage,
-  VersionedTransaction,
-} from "@solana/web3.js";
+import { Commitment, Connection, Keypair } from "@solana/web3.js";
 import wallet from "../../wba-wallet.json";
-import {
-  createCreateMetadataAccountV3Instruction,
-  PROGRAM_ID as METADATA_PROGRAM_ID,
-} from "@metaplex-foundation/mpl-token-metadata";
 import {
   Metaplex,
   bundlrStorage,
   keypairIdentity,
   toMetaplexFile,
 } from "@metaplex-foundation/js";
-import { readFile } from "fs/promises";
 import { readFileSync } from "fs";
 
 const payer = Keypair.fromSecretKey(new Uint8Array(wallet));
