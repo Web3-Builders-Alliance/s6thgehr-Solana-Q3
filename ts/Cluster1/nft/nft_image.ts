@@ -25,21 +25,12 @@ const metaplex = Metaplex.make(connection)
 
 (async () => {
   try {
-    // let img = readFileSync("./Cluster1/nft/generug.png");
-    // let imgFile = toMetaplexFile(img, "myrug.png");
+    let img = readFileSync("./Cluster1/nft/generug.png");
+    let imgFile = toMetaplexFile(img, "myrug.png");
 
-    const metadata = {
-      name: "My Rug",
-      symbol: "RUG",
-      description:
-        "A rug generated from https://deanmlittle.github.io/generug/",
-      image: "https://arweave.net/SJPD13QPAPfcUQlMQp5cYHmo48eoNUS6U4HZqKS5ta4",
-      // image: imgFile,
-    };
+    const uri = await metaplex.storage().upload(imgFile);
 
-    const { uri } = await metaplex.nfts().uploadMetadata(metadata);
-
-    console.log("You uploaded your metadata: ", uri);
+    console.log("You uploaded your image: ", uri);
   } catch (e) {
     console.error(`Oops, something went wrong: ${e}`);
   }

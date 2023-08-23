@@ -24,9 +24,10 @@ const metaplex = Metaplex.make(connection)
 (async () => {
   try {
     const { nft } = await metaplex.nfts().create({
-      uri: "https://arweave.net/96YnJjC7BIY-koxgCckAklguLvNMbkapMdSiK3UmwAc",
+      uri: "https://arweave.net/46oYqgwlgx18eKTDI2pcBKl44S_xUeB12RJPhGhVn9Y",
       sellerFeeBasisPoints: 0,
-      name: "My Rug",
+      name: "Rug#22",
+      symbol: "RUG",
     });
 
     console.log("You minted your nft: ", nft);
