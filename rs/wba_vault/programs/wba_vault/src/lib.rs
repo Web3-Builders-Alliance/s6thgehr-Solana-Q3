@@ -8,6 +8,7 @@ declare_id!("B19SNU7Gm8VeeJ6GsQgjnzdXgC4QaxrX3EC4udk8HHF2");
 
 #[program]
 pub mod wba_vault {
+
     use super::*;
     use anchor_lang::system_program::{transfer, Transfer};
     use anchor_spl::token::{transfer as spl_transfer, Transfer as SplTransfer};
@@ -16,6 +17,7 @@ pub mod wba_vault {
         ctx.accounts.state.auth_bump = *ctx.bumps.get("auth").unwrap();
         ctx.accounts.state.vault_bump = *ctx.bumps.get("vault").unwrap();
         ctx.accounts.state.state_bump = *ctx.bumps.get("state").unwrap();
+
         Ok(())
     }
 
@@ -55,14 +57,18 @@ pub mod wba_vault {
 
     pub fn spl_deposit(ctx: Context<SPLDeposit>, amount: u64) -> Result<()> {
         let accounts = SplTransfer {
-            from: ctx.accounts.owner.to_account_info(),
-            to: ctx.accounts.vault.to_account_info(),
+            from: ctx.accounts.owner_ata.to_account_info(),
+            to: ctx.accounts.spl_vault.to_account_info(),
             authority: ctx.accounts.owner.to_account_info(),
         };
 
         let cpi = CpiContext::new(ctx.accounts.token_program.to_account_info(), accounts);
 
         spl_transfer(cpi, amount)
+    }
+
+    pub fn spl_withdraw(_ctx: Context<SPLWithdraw>, _amount: u64) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -93,6 +99,25 @@ pub struct Payment<'info> {
 
 #[derive(Accounts)]
 pub struct SPLDeposit<'info> {
+    #[account(mut)]
+    owner: Signer<'info>,
+    #[account(mut, associated_token::authority = owner, associated_token::mint = mint)]
+    owner_ata: Account<'info, TokenAccount>,
+    mint: Account<'info, Mint>,
+    #[account(seeds=[b"auth", state.key().as_ref()], bump)]
+    ///CHECK: This is safe
+    auth: UncheckedAccount<'info>,
+    #[account(init, seeds=[b"spl_vault", state.key().as_ref()], payer = owner, token::mint = mint, token::authority = auth, bump)]
+    spl_vault: Account<'info, TokenAccount>,
+    #[account(seeds=[b"state", owner.key().as_ref()], bump = state.state_bump)]
+    state: Account<'info, VaultState>,
+    token_program: Program<'info, Token>,
+    associated_token_account: Program<'info, AssociatedToken>,
+    system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SPLWithdraw<'info> {
     #[account(mut)]
     owner: Signer<'info>,
     #[account(mut, associated_token::authority = owner, associated_token::mint = mint)]
