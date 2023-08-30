@@ -38,6 +38,7 @@ pub mod escrow {
         let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
 
         token::transfer(cpi_ctx, deposit_amount)
+
     }
 }
 
@@ -46,18 +47,35 @@ pub mod escrow {
 pub struct Make<'info> {
     #[account(mut)]
     pub maker: Signer<'info>,
-    #[account(mut, associated_token::mint = maker_token, associated_token::authority = maker)]
+    #[account(
+        mut, 
+        associated_token::mint = maker_token, 
+        associated_token::authority = maker
+    )]
     pub maker_ata: Account<'info, TokenAccount>,
     pub maker_token: Box<Account<'info, Mint>>,
     pub taker_token: Box<Account<'info, Mint>>,
     #[account(seeds = [b"auth", escrow.key().as_ref()], bump)]
     /// CHECK:
     pub auth: UncheckedAccount<'info>,
-    #[account(init, payer=maker,  
-        seeds=[b"vault", escrow.key().as_ref()], bump,  token::mint = maker_token, token::authority = auth
+    #[account(
+        init, 
+        payer=maker,  
+        seeds=[b"vault", escrow.key().as_ref()], 
+        bump,  
+        token::mint = maker_token, 
+        token::authority = auth
     )]
     pub vault: Account<'info, TokenAccount>,
-    #[account(init, payer=maker, seeds=[b"escrow", maker.key.as_ref(), seed.to_le_bytes().as_ref()], bump, space = Escrow::LEN)]
+    #[account(
+        init, 
+        payer=maker, 
+        seeds=[b"escrow", 
+        maker.key.as_ref(), 
+        seed.to_le_bytes().as_ref()], 
+        bump, 
+        space = Escrow::LEN
+    )]
     pub escrow: Box<Account<'info, Escrow>>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
