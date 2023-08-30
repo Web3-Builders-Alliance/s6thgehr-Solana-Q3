@@ -10,7 +10,9 @@ describe("escrow", () => {
 
   it("Is initialized!", async () => {
     // Add your test here.
-    const tx = await program.methods.initialize().rpc();
+    const tx = await program.methods
+      .make(new anchor.BN(1), new anchor.BN(100), new anchor.BN(100))
+      .rpc();
     console.log("Your transaction signature", tx);
   });
 });
