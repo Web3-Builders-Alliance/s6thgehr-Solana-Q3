@@ -1,14 +1,15 @@
+use std::collections::BTreeMap;
+
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{Mint, Token, TokenAccount},
+    token::{Mint, Token, TokenAccount, self},
 };
 
 declare_id!("DUYPwApAUKzthYjiFxTRJKhq4EJM9Wz76a2DLHbA2qjB");
 
 #[program]
 pub mod escrow {
-    use anchor_spl::token;
 
     use super::*;
 
@@ -18,27 +19,14 @@ pub mod escrow {
         deposit_amount: u64,
         offer_amount: u64,
     ) -> Result<()> {
-        let escrow = &mut ctx.accounts.escrow;
+        ctx.accounts.init(&ctx.bumps, seed, offer_amount)?;
+        ctx.accounts.deposit_to_vault(deposit_amount)
+    }
 
-        escrow.maker = *ctx.accounts.maker.key;
-        escrow.maker_token = ctx.accounts.maker_token.key();
-        escrow.taker_token = ctx.accounts.taker_token.key();
-        escrow.offer_amount = offer_amount;
-        escrow.seed = seed;
-        escrow.auth_bump = *ctx.bumps.get("auth").unwrap();
-        escrow.vault_bump = *ctx.bumps.get("vault").unwrap();
-        escrow.escrow_bump = *ctx.bumps.get("escrow").unwrap();
-
-        let cpi_accounts = token::Transfer {
-            from: ctx.accounts.maker_ata.to_account_info(),
-            to: ctx.accounts.vault.to_account_info(),
-            authority: ctx.accounts.maker.to_account_info(),
-        };
-
-        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-
-        token::transfer(cpi_ctx, deposit_amount)
-
+    pub fn take(ctx: Context<Take>) -> Result<()> {
+        ctx.accounts.deposit_to_maker()?;
+        ctx.accounts.empty_vault_to_taker()?;
+        ctx.accounts.close_accounts()
     }
 }
 
@@ -80,6 +68,131 @@ pub struct Make<'info> {
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
+}
+
+impl<'info> Make<'info> {
+    pub fn init(&mut self, bumps: &BTreeMap<String, u8>, seed: u64, offer_amount: u64) -> Result<()> {
+        let escrow = &mut self.escrow;
+
+        escrow.maker = *self.maker.key;
+        escrow.maker_token = self.maker_token.key();
+        escrow.taker_token = self.taker_token.key();
+        escrow.offer_amount = offer_amount;
+        escrow.seed = seed;
+        escrow.auth_bump = *bumps.get("auth").unwrap();
+        escrow.vault_bump = *bumps.get("vault").unwrap();
+        escrow.escrow_bump = *bumps.get("escrow").unwrap();
+        Ok(())
+    }
+
+    pub fn deposit_to_vault(&self, deposit_amount: u64) -> Result<()> {
+        let cpi_accounts = token::Transfer {
+            from: self.maker_ata.to_account_info(),
+            to: self.vault.to_account_info(),
+            authority: self.maker.to_account_info(),
+        };
+
+        let cpi_ctx = CpiContext::new(self.token_program.to_account_info(), cpi_accounts);
+
+        token::transfer(cpi_ctx, deposit_amount)
+    }
+}
+
+#[derive(Accounts)]
+pub struct Take<'info> {
+    #[account(mut)]
+    pub taker: Signer<'info>,
+    #[account(mut)]
+    /// Check: This is safe
+    pub maker: UncheckedAccount<'info>,
+    #[account(
+        init_if_needed, 
+        associated_token::mint = taker_token, 
+        associated_token::authority = maker,
+        payer=taker,
+    )]
+    pub maker_receive_ata: Account<'info, TokenAccount>,
+    #[account( 
+        mut,
+        associated_token::mint = taker_token, 
+        associated_token::authority = taker,
+    )]
+    pub taker_ata: Account<'info, TokenAccount>,
+    #[account(
+        init_if_needed, 
+        associated_token::mint = maker_token, 
+        associated_token::authority = taker,
+        payer=taker,
+    )]
+    pub taker_receive_ata: Account<'info, TokenAccount>,
+    pub maker_token: Box<Account<'info, Mint>>,
+    pub taker_token: Box<Account<'info, Mint>>,
+    #[account(seeds = [b"auth", escrow.key().as_ref()], bump = escrow.auth_bump)]
+    /// CHECK:
+    pub auth: UncheckedAccount<'info>,
+    #[account(
+        mut, 
+        seeds=[b"vault", escrow.key().as_ref()], 
+        bump = escrow.vault_bump,  
+        token::mint = maker_token, 
+        token::authority = auth
+    )]
+    pub vault: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        seeds=[b"escrow", 
+        maker.key.as_ref(), 
+        escrow.seed.to_le_bytes().as_ref()], 
+        bump = escrow.escrow_bump, 
+        close = maker,
+    )]
+    pub escrow: Box<Account<'info, Escrow>>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
+}
+
+impl<'info> Take<'info> {
+    pub fn deposit_to_maker(&self) -> Result<()> {
+        let cpi_accounts = token::Transfer {
+            from: self.taker_ata.to_account_info(),
+            to: self.maker_receive_ata.to_account_info(),
+            authority: self.taker.to_account_info(),
+        };
+
+        let cpi_ctx = CpiContext::new(self.token_program.to_account_info(), cpi_accounts);
+
+        token::transfer(cpi_ctx, self.escrow.offer_amount) 
+    }
+
+    pub fn empty_vault_to_taker(&self) -> Result<()> {
+        let cpi_accounts = token::Transfer {
+            from: self.vault.to_account_info(),
+            to: self.taker_receive_ata.to_account_info(),
+            authority: self.auth.to_account_info(),
+        };
+
+        let seeds = &[b"auth", self.escrow.to_account_info().key.as_ref(), &[self.escrow.auth_bump]];
+        let pda_signer = [&seeds[..]];
+        let cpi_ctx = CpiContext::new_with_signer(self.token_program.to_account_info(), cpi_accounts, &pda_signer);
+
+        token::transfer(cpi_ctx, self.escrow.offer_amount) 
+    }
+
+    pub fn close_accounts(&mut self) -> Result<()> {
+        let cpi_accounts = token::CloseAccount {
+            account: self.vault.to_account_info(),
+            destination: self.taker.to_account_info(),
+            authority: self.auth.to_account_info(),
+        };
+
+        let seeds = &[b"auth", self.escrow.to_account_info().key.as_ref(), &[self.escrow.auth_bump]];
+        let pda_signer = [&seeds[..]];
+        let cpi_ctx = CpiContext::new_with_signer(self.token_program.to_account_info(), cpi_accounts, &pda_signer);
+
+        token::close_account(cpi_ctx)
+    }
+    
 }
 
 #[account]
